@@ -1,0 +1,238 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="cs-token" content="__TOKEN__">
+  <title>CloudSnip</title>
+  <link rel="icon" href="/static/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/style.css?v=__VERSION__">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#/" title="Home">
+      <img src="/static/icon.svg" alt="" width="26" height="26">
+      <span>CloudSnip</span>
+    </a>
+    <div class="crumb" id="crumb" hidden>
+      <span class="crumb-sep">/</span>
+      <span id="plTitle" class="pl-title"></span>
+      <span id="plStats" class="pl-stats"></span>
+    </div>
+    <div class="spacer"></div>
+    <button class="icon-btn" id="helpBtn" data-icon="help" title="Keyboard shortcuts (?)"></button>
+    <button class="icon-btn" id="settingsBtn" data-icon="settings" title="Settings"></button>
+    <button class="icon-btn" id="quitBtn" data-icon="power" title="Quit CloudSnip"></button>
+  </header>
+
+  <div id="offline" class="offline" hidden>Lost connection to CloudSnip. Is it still running in its terminal window?</div>
+
+  <!-- Home: paste a link ------------------------------------------------ -->
+  <main id="home" class="home" hidden>
+    <section class="hero">
+      <h1>Download, trim &amp; save<br>SoundCloud playlists</h1>
+      <p class="lede">Paste a link. Every track downloads in the best quality available. Cut out the parts you don't want, then save the whole playlist as WAV, FLAC or MP3.</p>
+      <form id="loadForm" class="load-form" autocomplete="off">
+        <input id="urlInput" type="text" placeholder="https://soundcloud.com/artist/sets/playlist-name" spellcheck="false" aria-label="SoundCloud link">
+        <button class="btn primary" type="submit" id="loadBtn">Load playlist</button>
+      </form>
+      <p class="hint">Playlists, albums, single tracks, artist pages and likes all work.</p>
+    </section>
+    <section class="recent" id="recentWrap" hidden>
+      <h2>Recent</h2>
+      <ul id="recentList" class="recent-list"></ul>
+    </section>
+  </main>
+
+  <!-- Workspace: track list + editor + save bar ------------------------- -->
+  <main id="workspace" class="workspace" hidden>
+    <aside class="tracks">
+      <div class="tracks-head">
+        <label class="check" title="Tick / untick every track for saving">
+          <input type="checkbox" id="incAll"><span>Tracks</span>
+        </label>
+        <div class="spacer"></div>
+        <button class="btn small ghost" id="retryFailed" hidden>Retry failed</button>
+        <button class="btn small ghost" id="refreshBtn" data-icon="refresh" title="Check the link again for new tracks">Refresh</button>
+      </div>
+      <div id="resolveMsg" class="resolve-msg" hidden></div>
+      <ol id="trackList" class="track-list"></ol>
+    </aside>
+
+    <section class="editor" id="editor">
+      <div id="edEmpty" class="ed-empty">Select a track on the left to edit it.</div>
+      <div id="edBody" class="ed-body" hidden>
+        <div class="ed-head">
+          <div class="ed-cover"><img id="edCover" alt="" hidden></div>
+          <div class="ed-fields">
+            <input id="edTitle" class="ed-title" placeholder="Title" spellcheck="false" aria-label="Title">
+            <input id="edArtist" class="ed-artist" placeholder="Artist" spellcheck="false" aria-label="Artist">
+            <div class="ed-chips">
+              <span id="edQuality" class="chip" title="Stream that was downloaded"></span>
+              <span id="edEdited" class="chip warn" hidden></span>
+              <a id="edLink" class="chip link" target="_blank" rel="noreferrer">Open on SoundCloud</a>
+            </div>
+          </div>
+          <div class="ed-nav">
+            <button class="icon-btn" id="prevTrack" data-icon="up" title="Previous track (↑)"></button>
+            <button class="icon-btn" id="nextTrack" data-icon="down" title="Next track (↓)"></button>
+          </div>
+        </div>
+
+        <div id="edNotice" class="notice" hidden></div>
+
+        <div class="wave" id="wave">
+          <canvas id="waveCanvas"></canvas>
+          <div class="playhead" id="playhead" hidden></div>
+          <div class="hover-line" id="hoverLine" hidden><span id="hoverTime"></span></div>
+          <div class="wave-msg" id="waveMsg" hidden></div>
+        </div>
+        <div class="overview" id="overviewWrap" title="Overview: drag to move around when zoomed in">
+          <canvas id="overview"></canvas>
+          <div class="ov-head" id="ovHead" hidden></div>
+        </div>
+
+        <div class="transport">
+          <button class="btn icon-only" id="toStart" data-icon="toStart" title="Go to start (Home)"></button>
+          <button class="btn primary play" id="playBtn" data-icon="play" title="Play / pause (Space)"></button>
+          <button class="btn" id="playSel" data-icon="playSel" title="Play the selection (P)">Selection</button>
+          <button class="btn" id="audition" data-icon="ear" title="Hear how the cut will sound: 3 s before and after the selection (A)">Preview cut</button>
+          <div class="clock">
+            <span id="tCur">0:00.000</span><span class="dim"> / <span id="tDur">0:00.000</span></span>
+            <span class="result" id="tResult"></span>
+          </div>
+          <div class="spacer"></div>
+          <label class="check" title="Jump over removed parts while playing">
+            <input type="checkbox" id="skipCuts" checked><span>Skip cuts</span>
+          </label>
+          <label class="volume" title="Volume"><span data-icon="volume"></span><input type="range" id="volume" min="0" max="1" step="0.01" value="0.9"></label>
+          <div class="zoom">
+            <button class="btn icon-only" id="zoomOut" data-icon="zoomOut" title="Zoom out (−)"></button>
+            <button class="btn icon-only" id="zoomFit" data-icon="fit" title="Show whole track (0)"></button>
+            <button class="btn icon-only" id="zoomIn" data-icon="zoomIn" title="Zoom in (+)"></button>
+          </div>
+        </div>
+
+        <div class="tools">
+          <div class="sel-group">
+            <span class="label">Selection</span>
+            <input class="time-input" id="selStart" placeholder="start" spellcheck="false" aria-label="Selection start">
+            <span class="dim">→</span>
+            <input class="time-input" id="selEnd" placeholder="end" spellcheck="false" aria-label="Selection end">
+            <span class="dim" id="selLen"></span>
+            <button class="btn small ghost" id="setIn" title="Selection starts at the playhead (I)">Set in</button>
+            <button class="btn small ghost" id="setOut" title="Selection ends at the playhead (O)">Set out</button>
+          </div>
+          <div class="tool-row">
+            <button class="btn danger-soft" id="cutBtn" data-icon="scissors" title="Remove the selected part (Delete)">Cut selection</button>
+            <button class="btn" id="keepBtn" data-icon="crop" title="Keep only the selected part, remove everything else (K)">Keep only selection</button>
+            <button class="btn" id="restoreSelBtn" data-icon="heal" title="Bring back removed audio inside the selection (R)">Restore selection</button>
+            <span class="sep"></span>
+            <button class="btn icon-only" id="undoBtn" data-icon="undo" title="Undo (Ctrl+Z)"></button>
+            <button class="btn icon-only" id="redoBtn" data-icon="redo" title="Redo (Ctrl+Shift+Z)"></button>
+            <div class="spacer"></div>
+            <button class="btn ghost" id="discardBtn" title="Throw away edits you haven't saved">Discard changes</button>
+            <button class="btn ghost" id="restoreBtn" data-icon="restore" title="Remove every cut and go back to the original download">Restore original</button>
+            <button class="btn primary" id="saveBtn" data-icon="save" title="Save this track's edits (Ctrl+S)">Save track</button>
+          </div>
+        </div>
+        <p class="tip">Drag on the waveform to select · <kbd>Delete</kbd> cuts it · scroll to zoom · <kbd>Shift</kbd>+scroll to move · double-click a cut to select it · <kbd>?</kbd> for all shortcuts</p>
+      </div>
+    </section>
+
+    <footer class="exportbar">
+      <div class="ex-field">
+        <label for="exFormat">Format</label>
+        <select id="exFormat"></select>
+      </div>
+      <div class="ex-field grow">
+        <label for="exFolder">Save to folder</label>
+        <div class="ex-folder">
+          <input id="exFolder" spellcheck="false">
+          <button class="btn" id="exBrowse" data-icon="folder" title="Choose a folder">Browse</button>
+        </div>
+      </div>
+      <div class="ex-field">
+        <label for="exNaming">File names</label>
+        <select id="exNaming"></select>
+      </div>
+      <label class="check ex-cover" title="Embed the SoundCloud artwork (FLAC and MP3 only)">
+        <input type="checkbox" id="exCover" checked><span>Cover art</span>
+      </label>
+      <div class="ex-status" id="exStatus"></div>
+      <button class="btn primary big" id="exportBtn" data-icon="download">Save playlist</button>
+    </footer>
+  </main>
+
+  <!-- Dialogs ------------------------------------------------------------ -->
+  <dialog id="askDlg" class="dlg">
+    <form method="dialog">
+      <h3 id="askTitle"></h3>
+      <p id="askMsg"></p>
+      <div class="dlg-actions">
+        <button class="btn ghost" value="cancel" id="askCancel">Cancel</button>
+        <button class="btn" value="extra" id="askExtra" hidden></button>
+        <button class="btn primary" value="ok" id="askOk">OK</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="settingsDlg" class="dlg wide">
+    <form method="dialog" id="settingsForm">
+      <h3>Settings</h3>
+      <label class="field">
+        <span>SoundCloud OAuth token <em>(optional)</em></span>
+        <input type="password" id="setToken" autocomplete="off" spellcheck="false" placeholder="Paste a token to use your account">
+        <small>Only needed for SoundCloud Go+ tracks and Go+ high-quality (256 kbps AAC) streams. Find it on soundcloud.com while logged in:
+          open the browser developer tools → Application/Storage → Cookies → <code>oauth_token</code>. It's stored only on this computer.
+          <span id="tokenState"></span></small>
+      </label>
+      <label class="field">
+        <span>Default save folder</span>
+        <input id="setExportDir" spellcheck="false">
+        <small>Each playlist gets its own sub-folder in here, unless you type another folder in the save bar.</small>
+      </label>
+      <label class="field inline">
+        <span>Parallel downloads</span>
+        <input type="number" id="setParallel" min="1" max="8" step="1">
+      </label>
+      <div class="about" id="aboutInfo"></div>
+      <div class="dlg-actions">
+        <button class="btn ghost" value="cancel">Cancel</button>
+        <button class="btn primary" value="save" id="settingsSave">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="helpDlg" class="dlg wide">
+    <form method="dialog">
+      <h3>Keyboard shortcuts</h3>
+      <div class="keys">
+        <div><kbd>Space</kbd><span>Play / pause</span></div>
+        <div><kbd>Delete</kbd> <kbd>X</kbd><span>Cut the selection</span></div>
+        <div><kbd>K</kbd><span>Keep only the selection</span></div>
+        <div><kbd>R</kbd><span>Restore removed audio in the selection</span></div>
+        <div><kbd>I</kbd> / <kbd>O</kbd><span>Selection starts / ends at the playhead</span></div>
+        <div><kbd>P</kbd><span>Play the selection</span></div>
+        <div><kbd>A</kbd><span>Preview the cut (hear the join)</span></div>
+        <div><kbd>Esc</kbd><span>Clear the selection</span></div>
+        <div><kbd>←</kbd> <kbd>→</kbd><span>Move playhead 1 s (with Shift: 5 s)</span></div>
+        <div><kbd>Home</kbd> / <kbd>End</kbd><span>Go to start / end</span></div>
+        <div><kbd>+</kbd> <kbd>−</kbd> <kbd>0</kbd><span>Zoom in / out / whole track</span></div>
+        <div><kbd>↑</kbd> <kbd>↓</kbd><span>Previous / next track</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>Z</kbd><span>Undo (Shift for redo)</span></div>
+        <div><kbd>Ctrl</kbd>+<kbd>S</kbd><span>Save the track</span></div>
+      </div>
+      <h3>How editing works</h3>
+      <p class="muted">Your downloads are never modified. Cuts are stored as a list of time ranges and only applied when you press
+        <b>Save playlist</b>, so <b>Restore original</b> (or restoring part of a selection) always brings the audio back. A tiny 6 ms fade
+        is added at every join so cuts never click.</p>
+      <div class="dlg-actions"><button class="btn primary" value="ok">Got it</button></div>
+    </form>
+  </dialog>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <audio id="player" preload="auto"></audio>
+  <script src="/static/app.js?v=__VERSION__"></script>
+</body>
+</html>
